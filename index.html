@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pantry → Recipes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#f4f1ea;-webkit-font-smoothing:antialiased;}
+  ::selection{background:#b91c1c;color:#fff}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  input::placeholder{color:#a8a194}
+  input#freetext:focus{border-color:#b91c1c !important}
+  button{font-family:inherit}
+  .chip:hover{border-color:#b91c1c !important}
+  .chip.sel:hover{border-color:#1b1917 !important}
+  :focus-visible{outline:2px solid #b91c1c;outline-offset:2px}
+  @media (max-width:520px){
+    .hero-h1{font-size:38px !important}
+    .pad-x{padding-left:18px !important;padding-right:18px !important}
+    .topbar{padding-left:18px !important;padding-right:18px !important}
+  }
+  @media (prefers-reduced-motion:reduce){ *{animation-duration:.001ms !important} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+  "use strict";
+
+  /* ============================== DATA ============================== */
+  const GROUPS = [
+    { id:'pro', label:{en:'Proteins', es:'Proteínas'}, items:[
+      {key:'Chicken',en:'Chicken',es:'Pollo'},{key:'Eggs',en:'Eggs',es:'Huevos'},
+      {key:'Ground beef',en:'Ground beef',es:'Carne molida'},{key:'Tofu',en:'Tofu',es:'Tofu'},
+      {key:'Black beans',en:'Black beans',es:'Frijoles negros'},{key:'Chickpeas',en:'Chickpeas',es:'Garbanzos'},
+      {key:'Canned tuna',en:'Canned tuna',es:'Atún en lata'},{key:'Sausage',en:'Sausage',es:'Salchicha'},
+      {key:'Bacon',en:'Bacon',es:'Tocino'},{key:'Shrimp',en:'Shrimp',es:'Camarón'} ] },
+    { id:'veg', label:{en:'Vegetables & Aromatics', es:'Verduras y aromáticos'}, items:[
+      {key:'Onion',en:'Onion',es:'Cebolla'},{key:'Garlic',en:'Garlic',es:'Ajo'},
+      {key:'Tomato',en:'Tomato',es:'Tomate'},{key:'Spinach',en:'Spinach',es:'Espinaca'},
+      {key:'Bell pepper',en:'Bell pepper',es:'Pimiento'},{key:'Carrot',en:'Carrot',es:'Zanahoria'},
+      {key:'Broccoli',en:'Broccoli',es:'Brócoli'},{key:'Mushroom',en:'Mushroom',es:'Champiñón'},
+      {key:'Potato',en:'Potato',es:'Papa'},{key:'Zucchini',en:'Zucchini',es:'Calabacín'},
+      {key:'Corn',en:'Corn',es:'Elote'},{key:'Avocado',en:'Avocado',es:'Aguacate'},
+      {key:'Green onion',en:'Green onion',es:'Cebollín'},{key:'Lettuce',en:'Lettuce',es:'Lechuga'},
+      {key:'Cucumber',en:'Cucumber',es:'Pepino'},{key:'Celery',en:'Celery',es:'Apio'},
+      {key:'Ginger',en:'Ginger',es:'Jengibre'},{key:'Cilantro',en:'Cilantro',es:'Cilantro'} ] },
+    { id:'grain', label:{en:'Grains & Carbs', es:'Granos y carbohidratos'}, items:[
+      {key:'Rice',en:'Rice',es:'Arroz'},{key:'Pasta',en:'Pasta',es:'Pasta'},
+      {key:'Bread',en:'Bread',es:'Pan'},{key:'Tortillas',en:'Tortillas',es:'Tortillas'},
+      {key:'Quinoa',en:'Quinoa',es:'Quinoa'},{key:'Oats',en:'Oats',es:'Avena'} ] },
+    { id:'dairy', label:{en:'Dairy', es:'Lácteos'}, items:[
+      {key:'Milk',en:'Milk',es:'Leche'},{key:'Butter',en:'Butter',es:'Mantequilla'},
+      {key:'Cheese',en:'Cheese',es:'Queso'},{key:'Yogurt',en:'Yogurt',es:'Yogur'},
+      {key:'Sour cream',en:'Sour cream',es:'Crema agria'},{key:'Parmesan',en:'Parmesan',es:'Parmesano'} ] },
+    { id:'pantry', label:{en:'Pantry', es:'Alacena'}, items:[
+      {key:'Flour',en:'Flour',es:'Harina'},{key:'Sugar',en:'Sugar',es:'Azúcar'},
+      {key:'Olive oil',en:'Olive oil',es:'Aceite de oliva'},{key:'Soy sauce',en:'Soy sauce',es:'Salsa de soya'},
+      {key:'Canned tomatoes',en:'Canned tomatoes',es:'Tomate en lata'},{key:'Peanut butter',en:'Peanut butter',es:'Crema de maní'},
+      {key:'Honey',en:'Honey',es:'Miel'},{key:'Lime',en:'Lime',es:'Limón'},
+      {key:'Lemon',en:'Lemon',es:'Limón amarillo'},{key:'Coconut milk',en:'Coconut milk',es:'Leche de coco'} ] },
+  ];
+
+  // Highest-leverage ingredients to suggest when a pantry yields no matches.
+  const SUGG = [
+    {key:'Onion',en:'Onion',es:'Cebolla'},{key:'Garlic',en:'Garlic',es:'Ajo'},
+    {key:'Eggs',en:'Eggs',es:'Huevos'},{key:'Tomato',en:'Tomato',es:'Tomate'},
+    {key:'Rice',en:'Rice',es:'Arroz'},{key:'Cheese',en:'Cheese',es:'Queso'} ];
+
+  const STR = {
+    en:{ kicker:'FROM YOUR KITCHEN', headline:'Let\u2019s cook?',
+      sub:'Add what you have. We rank recipes by how little you\u2019re missing.',
+      yourPantry:'Your pantry', clear:'Clear', add:'Add',
+      freePlaceholder:'Add anything else \u2014 like cilantro',
+      find:'Find recipes', findEmpty:'Add ingredients to start',
+      emptyPantry:'Tap ingredients below to build your pantry',
+      loading:'Reading your pantry', loadingSub:'Finding the closest recipes\u2026',
+      resultsTitle:'Recipes for you', newSearch:'New search',
+      makeNow:'Make now', missing1:'Missing 1',
+      haveLabel:'You have', needLabel:'You\u2019ll need', steps:'Steps', min:'min',
+      emptyTitle:'No close matches yet', emptySub:'Add one of these to unlock the most recipes',
+      countSuffix:'recipes match' },
+    es:{ kicker:'DESDE TU COCINA', headline:'\u00bfCocinamos?',
+      sub:'Agrega lo que tienes. Ordenamos recetas seg\u00fan lo poco que te falta.',
+      yourPantry:'Tu despensa', clear:'Limpiar', add:'Agregar',
+      freePlaceholder:'Agrega algo m\u00e1s \u2014 como cilantro',
+      find:'Buscar recetas', findEmpty:'Agrega ingredientes',
+      emptyPantry:'Toca los ingredientes para armar tu despensa',
+      loading:'Revisando tu despensa', loadingSub:'Buscando las recetas m\u00e1s cercanas\u2026',
+      resultsTitle:'Recetas para ti', newSearch:'Nueva b\u00fasqueda',
+      makeNow:'Listo ya', missing1:'Falta 1',
+      haveLabel:'Tienes', needLabel:'Necesitas', steps:'Pasos', min:'min',
+      emptyTitle:'A\u00fan no hay recetas cercanas', emptySub:'Agrega uno de estos para desbloquear m\u00e1s recetas',
+      countSuffix:'recetas' },
+  };
+
+  /* ====================== RECIPE LIBRARY (100) ======================
+     core = the matchable, defining ingredients. Staples (salt, pepper,
+     oil, water, common spices) are assumed and never counted as missing,
+     so they live in the steps, not in core.                            */
+  function R(id,t,nen,nes,core,sen,ses){
+    return { id:id, t:t, name:{en:nen,es:nes},
+      core: core.map(function(c){return {en:c[0],es:c[1]};}),
+      steps:{en:sen,es:ses} };
+  }
+  const RECIPES = [
+    // ---- Eggs ----
+    R(1,10,"Classic Scrambled Eggs","Huevos revueltos clásicos",[["Eggs","Huevos"],["Butter","Mantequilla"]],
+      ["Whisk the eggs with a pinch of salt.","Melt butter in a pan over low heat.","Add eggs and stir gently until just set.","Serve right away."],
+      ["Bate los huevos con una pizca de sal.","Derrite la mantequilla a fuego bajo.","Agrega los huevos y revuelve suave hasta cuajar.","Sirve de inmediato."]),
+    R(2,15,"Cheese Omelet","Omelet de queso",[["Eggs","Huevos"],["Cheese","Queso"]],
+      ["Beat 3 eggs with salt and pepper.","Pour into a buttered pan over medium heat.","When almost set, add cheese and fold over.","Slide onto a plate and serve."],
+      ["Bate 3 huevos con sal y pimienta.","Vierte en un sartén con mantequilla a fuego medio.","Cuando casi cuaje, agrega queso y dobla.","Pasa al plato y sirve."]),
+    R(3,12,"Veggie Spinach Scramble","Revuelto de espinaca",[["Eggs","Huevos"],["Spinach","Espinaca"],["Onion","Cebolla"]],
+      ["Sauté chopped onion in oil until soft.","Add spinach and wilt for 1 minute.","Pour in beaten eggs; scramble until set.","Season and serve."],
+      ["Sofríe la cebolla picada hasta suavizar.","Agrega espinaca y marchita 1 minuto.","Vierte los huevos batidos y revuelve.","Sazona y sirve."]),
+    R(4,20,"Shakshuka","Shakshuka",[["Eggs","Huevos"],["Canned tomatoes","Tomate en lata"],["Onion","Cebolla"],["Bell pepper","Pimiento"]],
+      ["Sauté onion and pepper in oil.","Add canned tomatoes, cumin and paprika; simmer 8 min.","Make wells and crack in the eggs.","Cover and cook until whites set."],
+      ["Sofríe cebolla y pimiento en aceite.","Agrega tomate en lata, comino y pimentón; cuece 8 min.","Haz huecos y rompe los huevos.","Tapa y cocina hasta cuajar las claras."]),
+    R(5,18,"Egg Fried Rice","Arroz frito con huevo",[["Eggs","Huevos"],["Rice","Arroz"],["Green onion","Cebollín"],["Soy sauce","Salsa de soya"]],
+      ["Scramble eggs in a hot oiled pan; set aside.","Add cold cooked rice and fry 3 min.","Stir in soy sauce and green onion.","Fold eggs back in and serve."],
+      ["Revuelve los huevos en sartén caliente; reserva.","Agrega arroz cocido frío y fríe 3 min.","Incorpora salsa de soya y cebollín.","Regresa los huevos y sirve."]),
+    R(6,25,"Potato & Egg Hash","Hash de papa y huevo",[["Eggs","Huevos"],["Potato","Papa"],["Onion","Cebolla"]],
+      ["Dice potatoes and pan-fry until golden, 12 min.","Add onion and cook until soft.","Make wells, crack in eggs, cover.","Cook until eggs are set."],
+      ["Corta papas en cubos y fríe hasta dorar, 12 min.","Agrega cebolla y cocina hasta suavizar.","Haz huecos, rompe huevos, tapa.","Cocina hasta cuajar los huevos."]),
+    R(7,15,"Huevos Rancheros","Huevos rancheros",[["Eggs","Huevos"],["Tortillas","Tortillas"],["Canned tomatoes","Tomate en lata"]],
+      ["Warm tortillas in a dry pan.","Simmer canned tomatoes with garlic and chili for a quick salsa.","Fry the eggs sunny-side up.","Set eggs on tortillas and spoon salsa over."],
+      ["Calienta las tortillas en sartén seco.","Cuece tomate en lata con ajo y chile para una salsa rápida.","Fríe los huevos estrellados.","Coloca sobre tortillas y baña con salsa."]),
+    R(8,15,"Egg Salad","Ensalada de huevo",[["Eggs","Huevos"],["Yogurt","Yogur"]],
+      ["Hard-boil eggs, 10 min; cool and chop.","Mix with yogurt, salt and pepper.","Add a squeeze of lemon if you like.","Serve on bread or lettuce."],
+      ["Hierve los huevos 10 min; enfría y pica.","Mezcla con yogur, sal y pimienta.","Agrega un chorrito de limón si gustas.","Sirve en pan o lechuga."]),
+    R(9,18,"Mushroom Frittata","Frittata de champiñón",[["Eggs","Huevos"],["Mushroom","Champiñón"],["Cheese","Queso"]],
+      ["Sauté sliced mushrooms in an oven-safe pan.","Pour in 6 beaten eggs; scatter cheese.","Cook 3 min, then finish under the broiler.","Slice and serve warm."],
+      ["Sofríe champiñones en sartén apto al horno.","Vierte 6 huevos batidos; reparte queso.","Cocina 3 min y termina bajo el gratinador.","Corta y sirve tibio."]),
+    R(10,12,"Soft-Boiled Egg Toast","Pan con huevo tibio",[["Eggs","Huevos"],["Bread","Pan"]],
+      ["Boil eggs for 6 minutes, then peel.","Toast the bread and butter it.","Halve the eggs over the toast.","Sprinkle salt and pepper."],
+      ["Hierve los huevos 6 minutos y pela.","Tuesta el pan y úntale mantequilla.","Parte los huevos sobre el pan.","Espolvorea sal y pimienta."]),
+    // ---- Chicken ----
+    R(11,30,"Chicken & Rice Bowl","Bowl de pollo y arroz",[["Chicken","Pollo"],["Rice","Arroz"]],
+      ["Season chicken with salt, pepper and paprika.","Pan-sear until cooked through, 8 min per side.","Slice and serve over cooked rice.","Drizzle with pan juices."],
+      ["Sazona el pollo con sal, pimienta y pimentón.","Sella hasta cocer, 8 min por lado.","Rebana y sirve sobre arroz.","Baña con los jugos del sartén."]),
+    R(12,25,"Garlic Chicken Stir-Fry","Salteado de pollo al ajo",[["Chicken","Pollo"],["Broccoli","Brócoli"],["Garlic","Ajo"],["Soy sauce","Salsa de soya"]],
+      ["Cut chicken into strips; sear in hot oil.","Add broccoli and garlic; stir-fry 4 min.","Pour in soy sauce and a splash of water.","Toss until glossy and serve."],
+      ["Corta el pollo en tiras; sella en aceite caliente.","Agrega brócoli y ajo; saltea 4 min.","Vierte salsa de soya y un poco de agua.","Mezcla hasta brillar y sirve."]),
+    R(13,20,"Chicken Tacos","Tacos de pollo",[["Chicken","Pollo"],["Tortillas","Tortillas"],["Onion","Cebolla"],["Cilantro","Cilantro"]],
+      ["Cook diced chicken with cumin and salt.","Warm the tortillas.","Fill with chicken, onion and cilantro.","Finish with a squeeze of lime."],
+      ["Cocina el pollo en cubos con comino y sal.","Calienta las tortillas.","Rellena con pollo, cebolla y cilantro.","Termina con un chorrito de limón."]),
+    R(14,35,"Creamy Chicken Pasta","Pasta cremosa de pollo",[["Chicken","Pollo"],["Pasta","Pasta"],["Milk","Leche"],["Parmesan","Parmesano"]],
+      ["Boil pasta until al dente; save some water.","Sear chicken pieces; remove.","Make a quick sauce with milk and parmesan.","Toss pasta and chicken in; loosen with pasta water."],
+      ["Cuece la pasta al dente; guarda agua.","Sella el pollo y retira.","Haz una salsa rápida con leche y parmesano.","Mezcla pasta y pollo; afloja con agua de pasta."]),
+    R(15,40,"Coconut Chicken Curry","Curry de pollo y coco",[["Chicken","Pollo"],["Coconut milk","Leche de coco"],["Onion","Cebolla"],["Ginger","Jengibre"]],
+      ["Sauté onion, garlic and ginger in oil.","Add chicken and curry spices; brown lightly.","Pour in coconut milk; simmer 20 min.","Serve over rice."],
+      ["Sofríe cebolla, ajo y jengibre.","Agrega pollo y especias de curry; dora.","Vierte leche de coco; cuece 20 min.","Sirve sobre arroz."]),
+    R(16,30,"Chicken Fajitas","Fajitas de pollo",[["Chicken","Pollo"],["Bell pepper","Pimiento"],["Onion","Cebolla"],["Tortillas","Tortillas"]],
+      ["Slice chicken, peppers and onion.","Sear chicken; add veg and fajita spices.","Cook until peppers char slightly.","Serve in warm tortillas."],
+      ["Rebana pollo, pimientos y cebolla.","Sella el pollo; agrega verduras y especias.","Cocina hasta dorar los pimientos.","Sirve en tortillas calientes."]),
+    R(17,25,"Lemon Herb Chicken","Pollo al limón y hierbas",[["Chicken","Pollo"],["Lemon","Limón amarillo"],["Garlic","Ajo"]],
+      ["Rub chicken with garlic, salt and oregano.","Sear in oil until golden and cooked.","Squeeze lemon over at the end.","Rest 3 min, then slice."],
+      ["Unta el pollo con ajo, sal y orégano.","Sella en aceite hasta dorar y cocer.","Exprime limón al final.","Reposa 3 min y rebana."]),
+    R(18,30,"Chicken Noodle Soup","Sopa de pollo con pasta",[["Chicken","Pollo"],["Carrot","Zanahoria"],["Celery","Apio"],["Pasta","Pasta"]],
+      ["Simmer chicken in water with salt, 15 min; shred.","Add diced carrot and celery; cook 8 min.","Stir in pasta and cook until tender.","Return chicken and adjust seasoning."],
+      ["Cuece el pollo en agua con sal 15 min; deshebra.","Agrega zanahoria y apio; cuece 8 min.","Incorpora la pasta y cuece hasta suavizar.","Regresa el pollo y ajusta sazón."]),
+    R(19,25,"Teriyaki Chicken","Pollo teriyaki",[["Chicken","Pollo"],["Soy sauce","Salsa de soya"],["Honey","Miel"],["Rice","Arroz"]],
+      ["Sear bite-size chicken until golden.","Add soy sauce, honey and a little water.","Simmer until the sauce thickens.","Serve over rice with green onion."],
+      ["Sella el pollo en trozos hasta dorar.","Agrega salsa de soya, miel y un poco de agua.","Cuece hasta espesar la salsa.","Sirve sobre arroz con cebollín."]),
+    R(20,15,"Chicken Salad Wrap","Wrap de ensalada de pollo",[["Chicken","Pollo"],["Tortillas","Tortillas"],["Lettuce","Lechuga"]],
+      ["Shred cooked chicken; mix with yogurt and lemon.","Lay lettuce on a tortilla.","Add the chicken mix.","Roll tightly and slice."],
+      ["Deshebra pollo cocido; mezcla con yogur y limón.","Coloca lechuga en una tortilla.","Agrega la mezcla de pollo.","Enrolla firme y corta."]),
+    // ---- Beef ----
+    R(21,20,"Beef Tacos","Tacos de carne",[["Ground beef","Carne molida"],["Tortillas","Tortillas"],["Onion","Cebolla"]],
+      ["Brown ground beef with chopped onion.","Season with cumin, chili and salt.","Drain and warm the tortillas.","Fill and top with cilantro and lime."],
+      ["Dora la carne con cebolla picada.","Sazona con comino, chile y sal.","Escurre y calienta las tortillas.","Rellena y agrega cilantro y limón."]),
+    R(22,30,"Spaghetti Bolognese","Espagueti boloñesa",[["Ground beef","Carne molida"],["Pasta","Pasta"],["Canned tomatoes","Tomate en lata"],["Onion","Cebolla"]],
+      ["Brown beef with onion and garlic.","Add canned tomatoes and herbs; simmer 15 min.","Boil pasta until al dente.","Toss together and top with parmesan."],
+      ["Dora la carne con cebolla y ajo.","Agrega tomate en lata y hierbas; cuece 15 min.","Cuece la pasta al dente.","Mezcla y corona con parmesano."]),
+    R(23,35,"Beef Chili","Chili de carne",[["Ground beef","Carne molida"],["Black beans","Frijoles negros"],["Canned tomatoes","Tomate en lata"],["Onion","Cebolla"]],
+      ["Brown beef with onion.","Add chili powder, cumin and canned tomatoes.","Stir in black beans; simmer 20 min.","Serve with cheese on top."],
+      ["Dora la carne con cebolla.","Agrega chile en polvo, comino y tomate en lata.","Incorpora frijoles; cuece 20 min.","Sirve con queso encima."]),
+    R(24,25,"Picadillo","Picadillo",[["Ground beef","Carne molida"],["Potato","Papa"],["Carrot","Zanahoria"],["Tomato","Tomate"]],
+      ["Brown beef with onion and garlic.","Add diced potato and carrot.","Stir in chopped tomato and a little water.","Simmer until vegetables are tender."],
+      ["Dora la carne con cebolla y ajo.","Agrega papa y zanahoria en cubos.","Incorpora tomate picado y un poco de agua.","Cuece hasta suavizar las verduras."]),
+    R(25,20,"Beef & Broccoli","Res con brócoli",[["Ground beef","Carne molida"],["Broccoli","Brócoli"],["Soy sauce","Salsa de soya"],["Ginger","Jengibre"]],
+      ["Brown beef in a hot pan; push aside.","Add broccoli and ginger; stir-fry 4 min.","Pour in soy sauce and a splash of water.","Toss and serve over rice."],
+      ["Dora la carne en sartén caliente; aparta.","Agrega brócoli y jengibre; saltea 4 min.","Vierte salsa de soya y un poco de agua.","Mezcla y sirve sobre arroz."]),
+    R(26,30,"Stuffed Bell Peppers","Pimientos rellenos",[["Ground beef","Carne molida"],["Bell pepper","Pimiento"],["Rice","Arroz"],["Cheese","Queso"]],
+      ["Brown beef with onion; mix in cooked rice.","Halve peppers and remove seeds.","Fill peppers and top with cheese.","Bake 20 min until tender."],
+      ["Dora la carne con cebolla; mezcla con arroz.","Parte los pimientos y quita semillas.","Rellena y cubre con queso.","Hornea 20 min hasta suavizar."]),
+    R(27,15,"Sloppy Joes","Sloppy Joes",[["Ground beef","Carne molida"],["Bread","Pan"],["Canned tomatoes","Tomate en lata"],["Onion","Cebolla"]],
+      ["Brown beef with onion.","Add canned tomatoes and a spoon of honey.","Simmer until thick and saucy.","Spoon onto toasted bread."],
+      ["Dora la carne con cebolla.","Agrega tomate en lata y una cucharada de miel.","Cuece hasta espesar.","Sirve sobre pan tostado."]),
+    R(28,20,"Beef Lettuce Wraps","Wraps de res en lechuga",[["Ground beef","Carne molida"],["Lettuce","Lechuga"],["Soy sauce","Salsa de soya"],["Green onion","Cebollín"]],
+      ["Brown beef with garlic and ginger.","Stir in soy sauce and green onion.","Spoon into lettuce cups.","Top with extra green onion."],
+      ["Dora la carne con ajo y jengibre.","Incorpora salsa de soya y cebollín.","Sirve en hojas de lechuga.","Agrega más cebollín encima."]),
+    // ---- Pork / bacon / sausage ----
+    R(29,20,"Spaghetti Carbonara","Espagueti carbonara",[["Bacon","Tocino"],["Pasta","Pasta"],["Eggs","Huevos"],["Parmesan","Parmesano"]],
+      ["Boil pasta; save a cup of water.","Crisp chopped bacon in a pan.","Off heat, toss pasta with beaten egg and parmesan.","Loosen with pasta water until creamy."],
+      ["Cuece la pasta; guarda una taza de agua.","Dora el tocino picado.","Fuera del fuego, mezcla pasta con huevo batido y parmesano.","Afloja con agua hasta cremoso."]),
+    R(30,15,"BLT Sandwich","Sándwich BLT",[["Bacon","Tocino"],["Bread","Pan"],["Lettuce","Lechuga"],["Tomato","Tomate"]],
+      ["Crisp the bacon and drain.","Toast the bread.","Layer lettuce, tomato and bacon.","Close, slice and serve."],
+      ["Dora el tocino y escurre.","Tuesta el pan.","Acomoda lechuga, tomate y tocino.","Cierra, corta y sirve."]),
+    R(31,25,"Sausage & Peppers","Salchicha con pimientos",[["Sausage","Salchicha"],["Bell pepper","Pimiento"],["Onion","Cebolla"]],
+      ["Brown sliced sausage in a pan.","Add peppers and onion.","Cook until soft and lightly charred.","Serve on bread or over rice."],
+      ["Dora la salchicha en rebanadas.","Agrega pimientos y cebolla.","Cocina hasta suavizar y dorar.","Sirve en pan o sobre arroz."]),
+    R(32,20,"Bacon Fried Rice","Arroz frito con tocino",[["Bacon","Tocino"],["Rice","Arroz"],["Eggs","Huevos"],["Green onion","Cebollín"]],
+      ["Crisp chopped bacon; leave the fat.","Add cold rice and fry 3 min.","Push aside; scramble eggs.","Mix with soy sauce and green onion."],
+      ["Dora el tocino picado; deja la grasa.","Agrega arroz frío y fríe 3 min.","Aparta; revuelve los huevos.","Mezcla con salsa de soya y cebollín."]),
+    R(33,30,"Sausage Potato Skillet","Sartén de salchicha y papa",[["Sausage","Salchicha"],["Potato","Papa"],["Onion","Cebolla"]],
+      ["Pan-fry diced potato until golden.","Add sliced sausage and onion.","Cook until everything is browned.","Season and serve hot."],
+      ["Fríe la papa en cubos hasta dorar.","Agrega salchicha y cebolla.","Cocina hasta dorar todo.","Sazona y sirve caliente."]),
+    // ---- Seafood ----
+    R(34,15,"Garlic Shrimp Pasta","Pasta con camarón al ajo",[["Shrimp","Camarón"],["Pasta","Pasta"],["Garlic","Ajo"],["Lemon","Limón amarillo"]],
+      ["Boil pasta until al dente.","Sauté garlic in oil; add shrimp.","Cook shrimp 2 min per side.","Toss with pasta and a squeeze of lemon."],
+      ["Cuece la pasta al dente.","Sofríe ajo en aceite; agrega camarón.","Cocina el camarón 2 min por lado.","Mezcla con la pasta y limón."]),
+    R(35,18,"Shrimp Tacos","Tacos de camarón",[["Shrimp","Camarón"],["Tortillas","Tortillas"],["Cabbage","Repollo"],["Lime","Limón"]],
+      ["Season shrimp with chili and salt; sear 4 min.","Warm the tortillas.","Fill with shrimp and shredded cabbage.","Top with lime and a dab of sour cream."],
+      ["Sazona el camarón con chile y sal; sella 4 min.","Calienta las tortillas.","Rellena con camarón y repollo rallado.","Agrega limón y un poco de crema."]),
+    R(36,15,"Tuna Melt","Tuna melt",[["Canned tuna","Atún en lata"],["Bread","Pan"],["Cheese","Queso"]],
+      ["Mix tuna with a little yogurt and lemon.","Pile onto bread and top with cheese.","Grill in a buttered pan.","Flip until golden and melty."],
+      ["Mezcla atún con un poco de yogur y limón.","Coloca en pan y cubre con queso.","Dora en sartén con mantequilla.","Voltea hasta dorar y fundir."]),
+    R(37,12,"Tuna Salad","Ensalada de atún",[["Canned tuna","Atún en lata"],["Celery","Apio"],["Onion","Cebolla"]],
+      ["Drain the tuna.","Mix with chopped celery and onion.","Add yogurt, lemon, salt and pepper.","Serve on bread or greens."],
+      ["Escurre el atún.","Mezcla con apio y cebolla picados.","Agrega yogur, limón, sal y pimienta.","Sirve en pan o verduras."]),
+    R(38,20,"Tuna Pasta","Pasta con atún",[["Canned tuna","Atún en lata"],["Pasta","Pasta"],["Canned tomatoes","Tomate en lata"],["Garlic","Ajo"]],
+      ["Boil pasta until al dente.","Sauté garlic; add canned tomatoes.","Stir in drained tuna; simmer 5 min.","Toss with pasta and serve."],
+      ["Cuece la pasta al dente.","Sofríe ajo; agrega tomate en lata.","Incorpora atún escurrido; cuece 5 min.","Mezcla con la pasta y sirve."]),
+    R(39,18,"Shrimp Fried Rice","Arroz frito con camarón",[["Shrimp","Camarón"],["Rice","Arroz"],["Eggs","Huevos"],["Soy sauce","Salsa de soya"]],
+      ["Sear shrimp in hot oil; set aside.","Scramble eggs; add cold rice.","Fry 3 min with soy sauce.","Return shrimp and toss."],
+      ["Sella el camarón; reserva.","Revuelve huevos; agrega arroz frío.","Fríe 3 min con salsa de soya.","Regresa el camarón y mezcla."]),
+    R(40,25,"Garlic Butter Shrimp","Camarón al ajo y mantequilla",[["Shrimp","Camarón"],["Butter","Mantequilla"],["Garlic","Ajo"]],
+      ["Melt butter with minced garlic.","Add shrimp and cook 2 min per side.","Finish with lemon and parsley.","Serve over rice or with bread."],
+      ["Derrite mantequilla con ajo picado.","Agrega camarón y cocina 2 min por lado.","Termina con limón y perejil.","Sirve sobre arroz o con pan."]),
+    // ---- Tofu / beans / vegetarian ----
+    R(41,20,"Tofu Stir-Fry","Salteado de tofu",[["Tofu","Tofu"],["Broccoli","Brócoli"],["Soy sauce","Salsa de soya"],["Ginger","Jengibre"]],
+      ["Press and cube tofu; pan-fry until golden.","Add broccoli and ginger; stir-fry 4 min.","Pour in soy sauce and a splash of water.","Toss and serve over rice."],
+      ["Prensa y corta el tofu; dora en sartén.","Agrega brócoli y jengibre; saltea 4 min.","Vierte salsa de soya y un poco de agua.","Mezcla y sirve sobre arroz."]),
+    R(42,15,"Black Bean Tacos","Tacos de frijol negro",[["Black beans","Frijoles negros"],["Tortillas","Tortillas"],["Cheese","Queso"]],
+      ["Warm black beans with cumin and garlic.","Lightly mash some of them.","Fill warm tortillas and add cheese.","Top with cilantro and lime."],
+      ["Calienta los frijoles con comino y ajo.","Machaca un poco algunos.","Rellena tortillas y agrega queso.","Corona con cilantro y limón."]),
+    R(43,35,"Chickpea Curry","Curry de garbanzos",[["Chickpeas","Garbanzos"],["Coconut milk","Leche de coco"],["Onion","Cebolla"],["Tomato","Tomate"]],
+      ["Sauté onion, garlic and curry spices.","Add chopped tomato; cook down.","Stir in chickpeas and coconut milk.","Simmer 15 min; serve over rice."],
+      ["Sofríe cebolla, ajo y especias de curry.","Agrega tomate picado; reduce.","Incorpora garbanzos y leche de coco.","Cuece 15 min; sirve sobre arroz."]),
+    R(44,30,"Lentil Soup","Sopa de lentejas",[["Lentils","Lentejas"],["Carrot","Zanahoria"],["Onion","Cebolla"],["Celery","Apio"]],
+      ["Sauté onion, carrot and celery.","Add lentils, water and cumin.","Simmer 25 min until soft.","Season and finish with lemon."],
+      ["Sofríe cebolla, zanahoria y apio.","Agrega lentejas, agua y comino.","Cuece 25 min hasta suavizar.","Sazona y termina con limón."]),
+    R(45,15,"Tofu Scramble","Tofu revuelto",[["Tofu","Tofu"],["Spinach","Espinaca"],["Onion","Cebolla"]],
+      ["Crumble tofu into an oiled pan.","Add turmeric, salt and onion.","Cook 5 min, then fold in spinach.","Serve with toast."],
+      ["Desmenuza el tofu en sartén con aceite.","Agrega cúrcuma, sal y cebolla.","Cocina 5 min y agrega espinaca.","Sirve con pan tostado."]),
+    R(46,25,"Black Bean Soup","Sopa de frijol negro",[["Black beans","Frijoles negros"],["Onion","Cebolla"],["Garlic","Ajo"]],
+      ["Sauté onion and garlic with cumin.","Add black beans and water.","Simmer 15 min; blend half for body.","Serve with sour cream."],
+      ["Sofríe cebolla y ajo con comino.","Agrega frijoles y agua.","Cuece 15 min; licúa la mitad.","Sirve con crema agria."]),
+    R(47,12,"Chickpea Salad","Ensalada de garbanzos",[["Chickpeas","Garbanzos"],["Cucumber","Pepino"],["Tomato","Tomate"],["Lemon","Limón amarillo"]],
+      ["Drain and rinse the chickpeas.","Chop cucumber and tomato.","Toss with olive oil, lemon and salt.","Add herbs and serve."],
+      ["Escurre y enjuaga los garbanzos.","Pica pepino y tomate.","Mezcla con aceite, limón y sal.","Agrega hierbas y sirve."]),
+    R(48,20,"Rice & Beans","Arroz con frijoles",[["Rice","Arroz"],["Black beans","Frijoles negros"],["Onion","Cebolla"]],
+      ["Sauté onion and garlic in oil.","Stir in rice to coat.","Add water and beans; bring to a boil.","Cover and simmer until rice is tender."],
+      ["Sofríe cebolla y ajo en aceite.","Incorpora el arroz para cubrir.","Agrega agua y frijoles; hierve.","Tapa y cuece hasta suavizar."]),
+    R(49,15,"Bean & Cheese Quesadilla","Quesadilla de frijol y queso",[["Black beans","Frijoles negros"],["Tortillas","Tortillas"],["Cheese","Queso"]],
+      ["Mash beans with a little cumin.","Spread on a tortilla; add cheese.","Fold and toast in a dry pan.","Flip until golden and melty."],
+      ["Machaca frijoles con comino.","Unta en tortilla; agrega queso.","Dobla y dora en sartén seco.","Voltea hasta dorar y fundir."]),
+    R(50,30,"Veggie Fried Rice","Arroz frito de verduras",[["Rice","Arroz"],["Carrot","Zanahoria"],["Eggs","Huevos"],["Soy sauce","Salsa de soya"]],
+      ["Scramble eggs; set aside.","Stir-fry diced carrot and peas.","Add cold rice and soy sauce; fry 3 min.","Fold eggs back in and serve."],
+      ["Revuelve huevos; reserva.","Saltea zanahoria y chícharos.","Agrega arroz frío y soya; fríe 3 min.","Regresa los huevos y sirve."]),
+    R(51,18,"Hummus Bowl","Bowl de hummus",[["Chickpeas","Garbanzos"],["Lemon","Limón amarillo"],["Garlic","Ajo"]],
+      ["Blend chickpeas with garlic, lemon and oil.","Loosen with a little water.","Spread in a bowl; drizzle oil.","Serve with bread or veg."],
+      ["Licúa garbanzos con ajo, limón y aceite.","Afloja con un poco de agua.","Extiende en bowl; baña con aceite.","Sirve con pan o verduras."]),
+    R(52,20,"Refried Bean Tostadas","Tostadas de frijol",[["Black beans","Frijoles negros"],["Tortillas","Tortillas"],["Lettuce","Lechuga"],["Cheese","Queso"]],
+      ["Fry or toast tortillas until crisp.","Mash and warm the beans; spread on top.","Add lettuce and cheese.","Finish with sour cream and lime."],
+      ["Fríe o tuesta las tortillas hasta crujir.","Machaca y calienta frijoles; unta.","Agrega lechuga y queso.","Termina con crema y limón."]),
+    // ---- Pasta ----
+    R(53,20,"Tomato Garlic Pasta","Pasta al tomate y ajo",[["Pasta","Pasta"],["Canned tomatoes","Tomate en lata"],["Garlic","Ajo"]],
+      ["Boil pasta until al dente.","Sauté garlic in oil until fragrant.","Add canned tomatoes; simmer 10 min.","Toss with pasta and parmesan."],
+      ["Cuece la pasta al dente.","Sofríe ajo en aceite.","Agrega tomate en lata; cuece 10 min.","Mezcla con pasta y parmesano."]),
+    R(54,15,"Aglio e Olio","Aglio e olio",[["Pasta","Pasta"],["Garlic","Ajo"],["Olive oil","Aceite de oliva"]],
+      ["Boil pasta; reserve a cup of water.","Gently cook sliced garlic in olive oil.","Add chili flakes and pasta water.","Toss pasta until glossy."],
+      ["Cuece la pasta; reserva una taza de agua.","Cocina ajo en aceite de oliva.","Agrega chile en hojuelas y agua de pasta.","Mezcla hasta brillar."]),
+    R(55,25,"Mac & Cheese","Macarrones con queso",[["Pasta","Pasta"],["Cheese","Queso"],["Milk","Leche"],["Butter","Mantequilla"]],
+      ["Boil pasta until al dente.","Melt butter, whisk in flour and milk.","Stir in cheese until smooth.","Fold in pasta and serve."],
+      ["Cuece la pasta al dente.","Derrite mantequilla; agrega harina y leche.","Incorpora queso hasta suavizar.","Mezcla con la pasta y sirve."]),
+    R(56,20,"Creamy Mushroom Pasta","Pasta cremosa de champiñón",[["Pasta","Pasta"],["Mushroom","Champiñón"],["Milk","Leche"],["Parmesan","Parmesano"]],
+      ["Boil pasta until al dente.","Sauté mushrooms until browned.","Add milk and parmesan; simmer to thicken.","Toss with pasta."],
+      ["Cuece la pasta al dente.","Sofríe champiñones hasta dorar.","Agrega leche y parmesano; espesa.","Mezcla con la pasta."]),
+    R(57,25,"Pasta Primavera","Pasta primavera",[["Pasta","Pasta"],["Zucchini","Calabacín"],["Bell pepper","Pimiento"],["Parmesan","Parmesano"]],
+      ["Boil pasta until al dente.","Sauté zucchini and pepper in oil.","Toss with pasta and a splash of pasta water.","Finish with parmesan."],
+      ["Cuece la pasta al dente.","Saltea calabacín y pimiento.","Mezcla con pasta y agua de pasta.","Termina con parmesano."]),
+    R(58,15,"Pasta Salad","Ensalada de pasta",[["Pasta","Pasta"],["Tomato","Tomate"],["Cucumber","Pepino"],["Cheese","Queso"]],
+      ["Boil pasta; cool under water.","Chop tomato, cucumber and cheese.","Toss with olive oil and lemon.","Chill and serve."],
+      ["Cuece la pasta; enfría con agua.","Pica tomate, pepino y queso.","Mezcla con aceite y limón.","Enfría y sirve."]),
+    R(59,30,"Baked Ziti","Ziti al horno",[["Pasta","Pasta"],["Canned tomatoes","Tomate en lata"],["Cheese","Queso"],["Garlic","Ajo"]],
+      ["Boil pasta until just under done.","Mix with a quick garlic-tomato sauce.","Layer in a dish with cheese.","Bake 18 min until bubbly."],
+      ["Cuece la pasta casi lista.","Mezcla con salsa rápida de ajo y tomate.","Acomoda en molde con queso.","Hornea 18 min hasta burbujear."]),
+    // ---- Rice / quinoa bowls ----
+    R(60,30,"Burrito Bowl","Bowl tipo burrito",[["Rice","Arroz"],["Black beans","Frijoles negros"],["Corn","Elote"],["Avocado","Aguacate"]],
+      ["Cook rice and season with lime and cilantro.","Warm beans and corn.","Layer rice, beans, corn in a bowl.","Top with avocado and salsa."],
+      ["Cuece arroz y sazona con limón y cilantro.","Calienta frijoles y elote.","Acomoda arroz, frijoles y elote.","Corona con aguacate y salsa."]),
+    R(61,20,"Quinoa Veggie Bowl","Bowl de quinoa y verduras",[["Quinoa","Quinoa"],["Spinach","Espinaca"],["Chickpeas","Garbanzos"],["Lemon","Limón amarillo"]],
+      ["Cook quinoa until fluffy.","Wilt spinach and warm chickpeas.","Combine in a bowl.","Dress with lemon, oil and salt."],
+      ["Cuece la quinoa esponjosa.","Marchita espinaca y calienta garbanzos.","Combina en un bowl.","Adereza con limón, aceite y sal."]),
+    R(62,25,"Congee (Rice Porridge)","Congee (atole de arroz)",[["Rice","Arroz"],["Ginger","Jengibre"],["Green onion","Cebollín"]],
+      ["Simmer rice in lots of water with ginger.","Stir often until creamy, 25 min.","Season with salt and soy sauce.","Top with green onion."],
+      ["Cuece arroz en mucha agua con jengibre.","Revuelve hasta cremoso, 25 min.","Sazona con sal y salsa de soya.","Corona con cebollín."]),
+    R(63,30,"Vegetable Jambalaya","Jambalaya de verduras",[["Rice","Arroz"],["Bell pepper","Pimiento"],["Celery","Apio"],["Canned tomatoes","Tomate en lata"]],
+      ["Sauté pepper, celery and onion.","Add rice, canned tomatoes and spices.","Pour in water; cover and simmer.","Cook until rice is tender."],
+      ["Sofríe pimiento, apio y cebolla.","Agrega arroz, tomate en lata y especias.","Vierte agua; tapa y cuece.","Cocina hasta suavizar el arroz."]),
+    R(64,20,"Quinoa Tabbouleh","Tabbouleh de quinoa",[["Quinoa","Quinoa"],["Cucumber","Pepino"],["Tomato","Tomate"],["Cilantro","Cilantro"]],
+      ["Cook and cool the quinoa.","Finely chop cucumber, tomato and herbs.","Toss with lemon, oil and salt.","Chill before serving."],
+      ["Cuece y enfría la quinoa.","Pica pepino, tomate y hierbas.","Mezcla con limón, aceite y sal.","Enfría antes de servir."]),
+    // ---- Soups ----
+    R(65,25,"Tomato Soup","Sopa de tomate",[["Canned tomatoes","Tomate en lata"],["Onion","Cebolla"],["Garlic","Ajo"]],
+      ["Sauté onion and garlic.","Add canned tomatoes and water.","Simmer 15 min, then blend smooth.","Stir in a splash of milk."],
+      ["Sofríe cebolla y ajo.","Agrega tomate en lata y agua.","Cuece 15 min y licúa.","Agrega un poco de leche."]),
+    R(66,30,"Minestrone","Minestrone",[["Pasta","Pasta"],["Carrot","Zanahoria"],["Celery","Apio"],["Black beans","Frijoles negros"]],
+      ["Sauté carrot, celery and onion.","Add canned tomatoes, beans and water.","Simmer 15 min, then add pasta.","Cook until pasta is tender."],
+      ["Sofríe zanahoria, apio y cebolla.","Agrega tomate, frijoles y agua.","Cuece 15 min y agrega pasta.","Cocina hasta suavizar la pasta."]),
+    R(67,35,"Potato Leek Soup","Sopa de papa y poro",[["Potato","Papa"],["Onion","Cebolla"],["Milk","Leche"]],
+      ["Sauté onion until soft.","Add diced potato and water; simmer 20 min.","Blend until smooth.","Stir in milk and season."],
+      ["Sofríe la cebolla hasta suavizar.","Agrega papa y agua; cuece 20 min.","Licúa hasta suavizar.","Incorpora leche y sazona."]),
+    R(68,25,"Broccoli Cheddar Soup","Sopa de brócoli y queso",[["Broccoli","Brócoli"],["Cheese","Queso"],["Milk","Leche"],["Onion","Cebolla"]],
+      ["Sauté onion; add chopped broccoli and water.","Simmer until tender, 12 min.","Stir in milk and cheese until smooth.","Blend lightly if you like."],
+      ["Sofríe cebolla; agrega brócoli y agua.","Cuece hasta suavizar, 12 min.","Incorpora leche y queso.","Licúa ligero si gustas."]),
+    R(69,20,"Egg Drop Soup","Sopa de huevo",[["Eggs","Huevos"],["Green onion","Cebollín"]],
+      ["Bring seasoned water or broth to a simmer.","Stir in a thin cornstarch slurry.","Slowly pour in beaten egg, stirring.","Top with green onion."],
+      ["Lleva caldo sazonado a hervor suave.","Agrega un poco de maicena disuelta.","Vierte huevo batido despacio, revolviendo.","Corona con cebollín."]),
+    R(70,30,"Carrot Ginger Soup","Sopa de zanahoria y jengibre",[["Carrot","Zanahoria"],["Ginger","Jengibre"],["Onion","Cebolla"]],
+      ["Sauté onion and ginger.","Add chopped carrot and water; simmer 20 min.","Blend until smooth.","Season and add a splash of coconut milk."],
+      ["Sofríe cebolla y jengibre.","Agrega zanahoria y agua; cuece 20 min.","Licúa hasta suavizar.","Sazona y agrega leche de coco."]),
+    // ---- Salads ----
+    R(71,10,"Garden Salad","Ensalada verde",[["Lettuce","Lechuga"],["Tomato","Tomate"],["Cucumber","Pepino"]],
+      ["Tear lettuce into a bowl.","Add sliced tomato and cucumber.","Whisk oil, lemon, salt and pepper.","Toss and serve."],
+      ["Trocea la lechuga en un bowl.","Agrega tomate y pepino.","Bate aceite, limón, sal y pimienta.","Mezcla y sirve."]),
+    R(72,15,"Corn & Avocado Salad","Ensalada de elote y aguacate",[["Corn","Elote"],["Avocado","Aguacate"],["Lime","Limón"],["Cilantro","Cilantro"]],
+      ["Char corn in a dry pan if you can.","Combine with diced avocado.","Add lime, cilantro and salt.","Toss gently and serve."],
+      ["Dora el elote en sartén seco si puedes.","Combina con aguacate en cubos.","Agrega limón, cilantro y sal.","Mezcla suave y sirve."]),
+    R(73,20,"Potato Salad","Ensalada de papa",[["Potato","Papa"],["Eggs","Huevos"],["Celery","Apio"]],
+      ["Boil potatoes until tender; cool and cube.","Hard-boil eggs and chop.","Mix with yogurt, celery and mustard.","Chill before serving."],
+      ["Hierve papas hasta suavizar; enfría y corta.","Hierve huevos y pica.","Mezcla con yogur, apio y mostaza.","Enfría antes de servir."]),
+    R(74,12,"Cucumber Salad","Ensalada de pepino",[["Cucumber","Pepino"],["Onion","Cebolla"]],
+      ["Thinly slice cucumber and onion.","Toss with vinegar, sugar and salt.","Let sit 10 minutes.","Serve cold."],
+      ["Rebana fino pepino y cebolla.","Mezcla con vinagre, azúcar y sal.","Deja reposar 10 minutos.","Sirve frío."]),
+    R(75,15,"Caprese-Style Plate","Plato estilo caprese",[["Tomato","Tomate"],["Cheese","Queso"],["Olive oil","Aceite de oliva"]],
+      ["Slice tomato and fresh cheese.","Arrange on a plate.","Drizzle with olive oil and salt.","Add basil if you have it."],
+      ["Rebana tomate y queso fresco.","Acomoda en un plato.","Baña con aceite de oliva y sal.","Agrega albahaca si tienes."]),
+    // ---- Vegetable sides ----
+    R(76,25,"Roasted Vegetables","Verduras asadas",[["Potato","Papa"],["Carrot","Zanahoria"],["Zucchini","Calabacín"]],
+      ["Chop vegetables into chunks.","Toss with oil, salt and pepper.","Roast at high heat 20 min.","Flip once until golden."],
+      ["Corta las verduras en trozos.","Mezcla con aceite, sal y pimienta.","Asa a fuego alto 20 min.","Voltea una vez hasta dorar."]),
+    R(77,15,"Garlic Sautéed Spinach","Espinaca al ajo",[["Spinach","Espinaca"],["Garlic","Ajo"]],
+      ["Heat oil and sliced garlic.","Add spinach in batches.","Toss until wilted, 2 min.","Season with salt and lemon."],
+      ["Calienta aceite con ajo.","Agrega espinaca por tandas.","Mezcla hasta marchitar, 2 min.","Sazona con sal y limón."]),
+    R(78,20,"Mashed Potatoes","Puré de papa",[["Potato","Papa"],["Butter","Mantequilla"],["Milk","Leche"]],
+      ["Boil potatoes until very soft.","Drain and mash.","Beat in butter and warm milk.","Season with salt."],
+      ["Hierve papas hasta muy suaves.","Escurre y machaca.","Incorpora mantequilla y leche tibia.","Sazona con sal."]),
+    R(79,15,"Honey Glazed Carrots","Zanahorias con miel",[["Carrot","Zanahoria"],["Honey","Miel"],["Butter","Mantequilla"]],
+      ["Slice carrots and steam until tender.","Melt butter with honey in a pan.","Add carrots and toss to glaze.","Season with salt."],
+      ["Rebana zanahorias y cuece al vapor.","Derrite mantequilla con miel.","Agrega zanahorias y glasea.","Sazona con sal."]),
+    R(80,20,"Stuffed Mushrooms","Champiñones rellenos",[["Mushroom","Champiñón"],["Cheese","Queso"],["Garlic","Ajo"]],
+      ["Remove mushroom stems and chop them.","Mix with garlic, cheese and breadcrumbs.","Fill the caps.","Bake 15 min until golden."],
+      ["Quita los tallos y pícalos.","Mezcla con ajo, queso y pan molido.","Rellena los sombreros.","Hornea 15 min hasta dorar."]),
+    R(81,18,"Sautéed Zucchini","Calabacín salteado",[["Zucchini","Calabacín"],["Garlic","Ajo"],["Parmesan","Parmesano"]],
+      ["Slice zucchini into rounds.","Sauté in oil with garlic until golden.","Season with salt and pepper.","Finish with parmesan."],
+      ["Rebana el calabacín en rodajas.","Saltea con ajo hasta dorar.","Sazona con sal y pimienta.","Termina con parmesano."]),
+    R(82,15,"Street Corn (Elote)","Elote callejero",[["Corn","Elote"],["Cheese","Queso"],["Lime","Limón"]],
+      ["Char or boil the corn.","Spread with a little mayo or sour cream.","Sprinkle with cheese and chili.","Finish with lime."],
+      ["Asa o hierve el elote.","Unta un poco de mayonesa o crema.","Espolvorea queso y chile.","Termina con limón."]),
+    // ---- Breakfast ----
+    R(83,8,"Overnight Oats","Avena remojada",[["Oats","Avena"],["Milk","Leche"],["Honey","Miel"]],
+      ["Combine oats and milk in a jar.","Stir in honey.","Refrigerate overnight.","Top with fruit and eat cold."],
+      ["Combina avena y leche en un frasco.","Agrega miel.","Refrigera toda la noche.","Corona con fruta y come frío."]),
+    R(84,15,"Pancakes","Hot cakes",[["Flour","Harina"],["Eggs","Huevos"],["Milk","Leche"]],
+      ["Whisk flour, egg, milk and a little sugar.","Ladle batter onto a buttered pan.","Flip when bubbles form.","Serve with honey."],
+      ["Bate harina, huevo, leche y azúcar.","Vierte la mezcla en sartén con mantequilla.","Voltea cuando salgan burbujas.","Sirve con miel."]),
+    R(85,12,"French Toast","Pan francés",[["Bread","Pan"],["Eggs","Huevos"],["Milk","Leche"]],
+      ["Beat eggs with milk and cinnamon.","Soak bread slices briefly.","Fry in butter until golden both sides.","Serve with honey."],
+      ["Bate huevos con leche y canela.","Remoja el pan brevemente.","Fríe en mantequilla hasta dorar.","Sirve con miel."]),
+    R(86,10,"Yogurt Parfait","Parfait de yogur",[["Yogurt","Yogur"],["Oats","Avena"],["Honey","Miel"]],
+      ["Spoon yogurt into a glass.","Layer with oats or granola.","Drizzle with honey.","Add fruit and serve."],
+      ["Sirve yogur en un vaso.","Alterna con avena o granola.","Baña con miel.","Agrega fruta y sirve."]),
+    R(87,15,"Breakfast Burrito","Burrito de desayuno",[["Eggs","Huevos"],["Tortillas","Tortillas"],["Cheese","Queso"],["Potato","Papa"]],
+      ["Pan-fry diced potato until crisp.","Scramble eggs in the same pan.","Fill a tortilla with eggs, potato and cheese.","Roll up and toast lightly."],
+      ["Fríe papa en cubos hasta crujir.","Revuelve huevos en el mismo sartén.","Rellena tortilla con huevo, papa y queso.","Enrolla y dora ligero."]),
+    R(88,8,"Peanut Butter Banana Toast","Pan con crema de maní",[["Bread","Pan"],["Peanut butter","Crema de maní"],["Honey","Miel"]],
+      ["Toast the bread.","Spread peanut butter generously.","Drizzle with honey.","Slice and enjoy."],
+      ["Tuesta el pan.","Unta crema de maní.","Baña con miel.","Corta y disfruta."]),
+    R(89,10,"Cinnamon Oatmeal","Avena con canela",[["Oats","Avena"],["Milk","Leche"]],
+      ["Simmer oats in milk and water.","Stir in cinnamon and a little sugar.","Cook until creamy, 5 min.","Top with honey or fruit."],
+      ["Cuece avena en leche y agua.","Agrega canela y un poco de azúcar.","Cocina hasta cremoso, 5 min.","Corona con miel o fruta."]),
+    // ---- Sandwiches / toast ----
+    R(90,10,"Grilled Cheese","Sándwich de queso a la plancha",[["Bread","Pan"],["Cheese","Queso"],["Butter","Mantequilla"]],
+      ["Butter the outside of two bread slices.","Add cheese between them.","Grill in a pan over medium heat.","Flip until golden and melty."],
+      ["Unta mantequilla por fuera del pan.","Coloca queso en medio.","Dora en sartén a fuego medio.","Voltea hasta dorar y fundir."]),
+    R(91,8,"Avocado Toast","Pan con aguacate",[["Bread","Pan"],["Avocado","Aguacate"],["Lemon","Limón amarillo"]],
+      ["Toast the bread.","Mash avocado with lemon and salt.","Spread over the toast.","Add chili flakes if you like."],
+      ["Tuesta el pan.","Machaca aguacate con limón y sal.","Unta sobre el pan.","Agrega chile en hojuelas si gustas."]),
+    R(92,15,"Cheese Quesadilla","Quesadilla de queso",[["Tortillas","Tortillas"],["Cheese","Queso"]],
+      ["Sprinkle cheese over half a tortilla.","Fold and toast in a dry pan.","Flip until golden both sides.","Cut into wedges."],
+      ["Reparte queso sobre media tortilla.","Dobla y dora en sartén seco.","Voltea hasta dorar.","Corta en triángulos."]),
+    R(93,15,"Caprese Toast","Pan caprese",[["Bread","Pan"],["Tomato","Tomate"],["Cheese","Queso"]],
+      ["Toast thick bread slices.","Top with sliced tomato and cheese.","Drizzle with olive oil and salt.","Broil 2 min until melty."],
+      ["Tuesta rebanadas gruesas de pan.","Cubre con tomate y queso.","Baña con aceite y sal.","Gratina 2 min hasta fundir."]),
+    R(94,10,"Tomato Bruschetta","Bruschetta de tomate",[["Bread","Pan"],["Tomato","Tomate"],["Garlic","Ajo"]],
+      ["Toast bread and rub with raw garlic.","Dice tomato; toss with oil and salt.","Spoon over the toast.","Add basil if you have it."],
+      ["Tuesta el pan y frota con ajo.","Pica tomate; mezcla con aceite y sal.","Coloca sobre el pan.","Agrega albahaca si tienes."]),
+    // ---- Snacks / sweet ----
+    R(95,5,"Peanut Butter Energy Balls","Bolitas de maní",[["Peanut butter","Crema de maní"],["Oats","Avena"],["Honey","Miel"]],
+      ["Mix peanut butter, oats and honey.","Roll into small balls.","Chill 15 minutes to firm.","Store in the fridge."],
+      ["Mezcla crema de maní, avena y miel.","Forma bolitas.","Enfría 15 minutos.","Guarda en el refrigerador."]),
+    R(96,12,"Cinnamon Sugar Toast","Pan con azúcar y canela",[["Bread","Pan"],["Butter","Mantequilla"],["Sugar","Azúcar"]],
+      ["Toast and butter the bread.","Mix sugar with cinnamon.","Sprinkle over the warm toast.","Serve right away."],
+      ["Tuesta y unta mantequilla al pan.","Mezcla azúcar con canela.","Espolvorea sobre el pan tibio.","Sirve de inmediato."]),
+    R(97,15,"Simple Pancake Mug","Hot cake en taza",[["Flour","Harina"],["Milk","Leche"],["Sugar","Azúcar"]],
+      ["Whisk flour, milk, sugar and baking powder in a mug.","Microwave 90 seconds.","Let cool a minute.","Top with honey."],
+      ["Bate harina, leche, azúcar y polvo para hornear en taza.","Microondas 90 segundos.","Deja enfriar un minuto.","Corona con miel."]),
+    R(98,10,"Honey Yogurt Bowl","Bowl de yogur con miel",[["Yogurt","Yogur"],["Honey","Miel"]],
+      ["Spoon yogurt into a bowl.","Drizzle generously with honey.","Add oats or nuts for crunch.","Serve chilled."],
+      ["Sirve yogur en un bowl.","Baña con miel.","Agrega avena o nueces.","Sirve frío."]),
+    R(99,18,"Cheese Stuffed Potatoes","Papas rellenas de queso",[["Potato","Papa"],["Cheese","Queso"],["Sour cream","Crema agria"]],
+      ["Bake or microwave potatoes until soft.","Split and fluff the insides.","Top with cheese and let it melt.","Finish with sour cream and green onion."],
+      ["Hornea o calienta papas hasta suaves.","Ábrelas y esponja el interior.","Cubre con queso y deja fundir.","Termina con crema y cebollín."]),
+    R(100,20,"Veggie Quesadilla","Quesadilla de verduras",[["Tortillas","Tortillas"],["Cheese","Queso"],["Mushroom","Champiñón"],["Spinach","Espinaca"]],
+      ["Sauté mushrooms and spinach.","Lay cheese and veg on a tortilla.","Fold and toast in a dry pan.","Flip until golden and melty."],
+      ["Sofríe champiñones y espinaca.","Coloca queso y verduras en tortilla.","Dobla y dora en sartén seco.","Voltea hasta dorar y fundir."]),
+  ];
+
+  // Small forgiving aliases for free-text typing.
+  const ALIAS = {
+    'scallion':'green onion','scallions':'green onion','green onions':'green onion',
+    'coriander':'cilantro','garbanzo':'chickpeas','garbanzos':'chickpeas','chickpea':'chickpeas',
+    'tomatoes':'tomato','potatoes':'potato','mushrooms':'mushroom','carrots':'carrot'
+  };
+
+  // Flat lookup of every selectable chip by key (for click delegation).
+  const itemByKey = {};
+  GROUPS.forEach(function(g){ g.items.forEach(function(it){ itemByKey[it.key]=it; }); });
+  SUGG.forEach(function(it){ if(!itemByKey[it.key]) itemByKey[it.key]=it; });
+
+  /* ============================= STATE ============================= */
+  const state = { lang:'en', selected:[], freeText:'', status:'idle', recipes:[] };
+
+  /* ============================ HELPERS =========================== */
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function norm(s){
+    var v = String(s==null?'':s).toLowerCase().trim();
+    return ALIAS[v] || v;
+  }
+  function isSel(key){ return state.selected.some(function(s){ return s.key===key; }); }
+  function label(obj){ return obj[state.lang] || obj.en; }
+
+  /* =========================== MATCHING =========================== */
+  function pantryTokens(){
+    var set = {};
+    state.selected.forEach(function(p){
+      set[norm(p.en)] = true;
+      if(p.es) set[norm(p.es)] = true;
+    });
+    return set;
+  }
+  function matchRecipes(){
+    var have = pantryTokens();
+    var scored = [];
+    RECIPES.forEach(function(r){
+      var haveCore = [], missCore = [];
+      r.core.forEach(function(c){
+        if(have[norm(c.en)] || have[norm(c.es)]) haveCore.push(c);
+        else missCore.push(c);
+      });
+      // Surface only realistic matches: at least one core ingredient on
+      // hand, and no more than two missing.
+      if(haveCore.length >= 1 && missCore.length <= 2){
+        scored.push({ r:r, have:haveCore, miss:missCore });
+      }
+    });
+    scored.sort(function(a,b){
+      return (a.miss.length - b.miss.length)        // fewest missing first
+        || (b.have.length - a.have.length)          // then most overlap
+        || (a.r.t - b.r.t);                         // then quickest
+    });
+    return scored.slice(0, 12);
+  }
+
+  /* =========================== MUTATIONS ========================== */
+  function setLang(l){ state.lang=l; render(); }
+  function toggle(it){
+    if(isSel(it.key)) state.selected=state.selected.filter(function(x){return x.key!==it.key;});
+    else state.selected=state.selected.concat([{key:it.key,en:it.en,es:it.es}]);
+    render();
+  }
+  function addItem(it){
+    if(!isSel(it.key)){ state.selected=state.selected.concat([{key:it.key,en:it.en,es:it.es}]); render(); }
+  }
+  function addFree(){
+    var inp=document.getElementById('freetext');
+    var txt=((inp&&inp.value)||state.freeText||'').trim();
+    if(!txt) return;
+    var key='ft:'+txt.toLowerCase();
+    if(!isSel(key)) state.selected=state.selected.concat([{key:key,en:txt,es:txt}]);
+    state.freeText='';
+    render();
+    var again=document.getElementById('freetext'); if(again) again.focus();
+  }
+  function remove(key){ state.selected=state.selected.filter(function(x){return x.key!==key;}); render(); }
+  function clearAll(){ state.selected=[]; render(); }
+  function reset(){ state.status='idle'; state.recipes=[]; render(); }
+  function find(){
+    if(!state.selected.length) return;
+    state.status='loading'; render();
+    setTimeout(function(){
+      state.recipes = matchRecipes();
+      state.status='results'; render();
+    }, 320);
+  }
+
+  /* ============================ STYLES ============================ */
+  var SEG = "padding:7px 15px;border:none;background:transparent;color:#8c8579;font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;border-radius:999px;letter-spacing:.05em;transition:all .15s;";
+  var SEG_ON = SEG + "background:#1b1917;color:#f4f1ea;";
+  var CHIP = "padding:9px 15px;border:1px solid #e4ded2;background:#fffdf9;border-radius:999px;font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:500;font-size:14px;color:#1b1917;cursor:pointer;line-height:1;white-space:nowrap;transition:all .15s ease;";
+  var CHIP_SEL = "padding:9px 15px;border:1px solid #1b1917;background:#1b1917;border-radius:999px;font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:500;font-size:14px;color:#f4f1ea;cursor:pointer;line-height:1;white-space:nowrap;transition:all .15s ease;";
+  function findBtnStyle(){
+    var can = state.selected.length>0;
+    var base = "display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:15px 28px;border-radius:999px;border:none;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:16px;cursor:"+(can?'pointer':'not-allowed')+";transition:all .15s;box-shadow:"+(can?'0 6px 20px rgba(185,28,28,.22)':'none')+";";
+    return base + (can ? "background:#b91c1c;color:#fff;" : "background:#e7e1d6;color:#a29b8e;");
+  }
+
+  /* =========================== VIEWS ============================== */
+  function topBar(isEn){
+    return '<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;padding:20px 28px;border-bottom:1px solid #e4ded2;position:sticky;top:0;background:rgba(244,241,234,.86);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;">' +
+      '<div style="display:flex;align-items:center;gap:11px;">' +
+        '<span style="width:15px;height:15px;background:#b91c1c;border-radius:3px;display:inline-block;"></span>' +
+        '<span style="font-family:\'Newsreader\',serif;font-size:19px;font-weight:600;letter-spacing:-.01em;">Pantry&nbsp;&rarr;&nbsp;Recipes</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:2px;background:#fffdf9;border:1px solid #e4ded2;border-radius:999px;padding:3px;">' +
+        '<button type="button" data-act="lang" data-lang="en" style="'+(isEn?SEG_ON:SEG)+'">EN</button>' +
+        '<button type="button" data-act="lang" data-lang="es" style="'+(isEn?SEG:SEG_ON)+'">ES</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function pantryTray(t){
+    var chips = state.selected.map(function(s){
+      return '<span style="display:inline-flex;align-items:center;gap:7px;background:#1b1917;color:#f4f1ea;padding:7px 9px 7px 13px;border-radius:999px;font-size:13.5px;font-weight:500;">'+
+        esc(label(s))+
+        '<button type="button" data-act="remove" data-key="'+esc(s.key)+'" aria-label="remove" style="background:rgba(244,241,234,.18);border:none;color:#f4f1ea;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;">&times;</button>'+
+      '</span>';
+    }).join('');
+    return '<div style="background:#fffdf9;border:1px solid #e4ded2;border-radius:16px;padding:18px 20px;margin-bottom:22px;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">'+
+        '<div style="font-family:\'Newsreader\',serif;font-size:16px;font-weight:600;">'+esc(t.yourPantry)+' <span style="color:#b91c1c;">&middot; '+state.selected.length+'</span></div>'+
+        '<button type="button" data-act="clear" style="background:none;border:none;color:#8c8579;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">'+esc(t.clear)+'</button>'+
+      '</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;">'+chips+'</div>'+
+    '</div>';
+  }
+
+  function categories(){
+    return GROUPS.map(function(g){
+      var chips = g.items.map(function(it){
+        var sel = isSel(it.key);
+        return '<button type="button" class="chip'+(sel?' sel':'')+'" data-act="toggle" data-key="'+esc(it.key)+'" style="'+(sel?CHIP_SEL:CHIP)+'">'+esc(it[state.lang])+'</button>';
+      }).join('');
+      return '<div>'+
+        '<div style="font-family:\'Newsreader\',serif;font-size:15px;font-weight:600;margin-bottom:13px;display:flex;align-items:center;gap:9px;">'+
+          '<span style="width:6px;height:6px;background:#b91c1c;border-radius:50%;display:inline-block;"></span>'+esc(g.label[state.lang])+
+        '</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:9px;">'+chips+'</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  function idleView(t){
+    var has = state.selected.length>0;
+    var findText = has ? t.find : t.findEmpty;
+    return '<div style="max-width:740px;margin:0 auto;padding-top:48px;">'+
+      '<div style="font-size:12px;font-weight:700;letter-spacing:.18em;color:#b91c1c;margin-bottom:14px;">'+esc(t.kicker)+'</div>'+
+      '<h1 class="hero-h1" style="font-family:\'Newsreader\',serif;font-weight:500;font-size:52px;line-height:1.04;letter-spacing:-.02em;margin:0 0 16px;text-wrap:balance;">'+esc(t.headline)+'</h1>'+
+      '<p style="font-size:17px;line-height:1.5;color:#6e685d;max-width:540px;margin:0 0 36px;">'+esc(t.sub)+'</p>'+
+      (has ? pantryTray(t) : '<p style="font-size:13.5px;line-height:1.5;color:#a29b8e;margin:0 0 22px;">'+esc(t.emptyPantry)+'</p>')+
+      '<div style="display:flex;gap:9px;margin-bottom:34px;">'+
+        '<input id="freetext" value="'+esc(state.freeText)+'" placeholder="'+esc(t.freePlaceholder)+'" autocomplete="off" style="flex:1;min-width:0;padding:13px 16px;border:1px solid #e4ded2;border-radius:12px;background:#fffdf9;font-family:inherit;font-size:15px;color:#1b1917;outline:none;">'+
+        '<button type="button" data-act="addfree" style="padding:13px 22px;border:none;background:#1b1917;color:#f4f1ea;border-radius:12px;font-family:inherit;font-weight:600;font-size:15px;cursor:pointer;white-space:nowrap;">'+esc(t.add)+'</button>'+
+      '</div>'+
+      '<div style="display:flex;flex-direction:column;gap:28px;">'+categories()+'</div>'+
+      '<div style="position:sticky;bottom:0;padding:22px 0 8px;margin-top:36px;background:linear-gradient(to top,#f4f1ea 62%,rgba(244,241,234,0));">'+
+        '<button type="button" data-act="find" style="'+findBtnStyle()+'">'+esc(findText)+'<span style="font-size:18px;">&rarr;</span></button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function loadingView(t){
+    return '<div style="max-width:740px;margin:0 auto;padding-top:140px;display:flex;flex-direction:column;align-items:center;text-align:center;">'+
+      '<div style="width:38px;height:38px;border:3px solid #e4ded2;border-top-color:#b91c1c;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:26px;"></div>'+
+      '<div style="font-family:\'Newsreader\',serif;font-size:24px;font-weight:500;margin-bottom:8px;">'+esc(t.loading)+'</div>'+
+      '<div style="font-size:15px;color:#8c8579;">'+esc(t.loadingSub)+'</div>'+
+    '</div>';
+  }
+
+  function recipeCard(item, t, isEn){
+    var r = item.r;
+    var miss = item.miss, have = item.have;
+    var mn = miss.length===0;
+    var badgeText = mn ? t.makeNow : (miss.length===1 ? t.missing1 : (isEn ? ('Missing '+miss.length) : ('Faltan '+miss.length)));
+    var badgeStyle = mn
+      ? 'background:#1b1917;color:#f4f1ea;border:1px solid #1b1917;'
+      : 'background:#fbeae8;color:#b91c1c;border:1px solid #f0c9c4;';
+    var timeLabel = r.t + ' ' + t.min;
+
+    var haveChips = have.map(function(c){
+      return '<span style="padding:5px 11px;border:1px solid #e4ded2;background:#fff;border-radius:8px;font-size:13px;color:#4a463f;">'+esc(c[state.lang])+'</span>';
+    }).join('');
+    var needBlock = miss.length>0 ? (
+      '<div>'+
+        '<div style="font-size:11.5px;font-weight:700;letter-spacing:.12em;color:#b91c1c;text-transform:uppercase;margin-bottom:9px;">'+esc(t.needLabel)+'</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:7px;max-width:300px;">'+
+          miss.map(function(c){return '<span style="padding:5px 11px;border:1px solid #f0c9c4;background:#fbeae8;border-radius:8px;font-size:13px;color:#b91c1c;font-weight:500;">'+esc(c[state.lang])+'</span>';}).join('')+
+        '</div>'+
+      '</div>'
+    ) : '';
+    var stepRows = r.steps[state.lang].map(function(st,i){
+      return '<div style="display:flex;gap:13px;align-items:flex-start;">'+
+        '<span style="flex:none;width:23px;height:23px;border-radius:50%;background:#1b1917;color:#f4f1ea;font-family:\'Newsreader\',serif;font-size:12.5px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px;">'+(i+1)+'</span>'+
+        '<span style="font-size:15px;line-height:1.5;color:#332f29;">'+esc(st)+'</span>'+
+      '</div>';
+    }).join('');
+
+    return '<div style="background:#fffdf9;border:1px solid #e4ded2;border-radius:18px;padding:26px 28px;animation:fadeUp .35s ease both;">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:6px;">'+
+        '<h3 style="font-family:\'Newsreader\',serif;font-weight:600;font-size:25px;line-height:1.12;letter-spacing:-.01em;margin:0;">'+esc(r.name[state.lang])+'</h3>'+
+        '<span style="flex:none;padding:6px 13px;border-radius:999px;font-size:12.5px;font-weight:700;letter-spacing:.02em;white-space:nowrap;'+badgeStyle+'">'+esc(badgeText)+'</span>'+
+      '</div>'+
+      '<div style="font-size:13.5px;color:#8c8579;font-weight:500;margin-bottom:20px;">'+esc(timeLabel)+'</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:28px;margin-bottom:22px;">'+
+        '<div>'+
+          '<div style="font-size:11.5px;font-weight:700;letter-spacing:.12em;color:#6e685d;text-transform:uppercase;margin-bottom:9px;">'+esc(t.haveLabel)+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:7px;max-width:340px;">'+haveChips+'</div>'+
+        '</div>'+
+        needBlock+
+      '</div>'+
+      '<div style="border-top:1px solid #efe9dd;padding-top:18px;">'+
+        '<div style="font-size:11.5px;font-weight:700;letter-spacing:.12em;color:#6e685d;text-transform:uppercase;margin-bottom:13px;">'+esc(t.steps)+'</div>'+
+        '<div style="display:flex;flex-direction:column;gap:11px;">'+stepRows+'</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function emptyResults(t){
+    var sugg = SUGG.filter(function(x){return !isSel(x.key);}).slice(0,3);
+    var btns = sugg.map(function(x){
+      return '<button type="button" data-act="add" data-key="'+esc(x.key)+'" style="padding:10px 18px;border:1px solid #1b1917;background:#1b1917;color:#f4f1ea;border-radius:999px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;">+ '+esc(x[state.lang])+'</button>';
+    }).join('');
+    return '<div style="background:#fffdf9;border:1px solid #e4ded2;border-radius:18px;padding:40px 34px;text-align:center;">'+
+      '<div style="font-family:\'Newsreader\',serif;font-size:26px;font-weight:500;margin-bottom:10px;">'+esc(t.emptyTitle)+'</div>'+
+      '<p style="font-size:15px;color:#8c8579;margin:0 0 22px;">'+esc(t.emptySub)+'</p>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:9px;justify-content:center;">'+btns+'</div>'+
+    '</div>';
+  }
+
+  function resultsView(t, isEn){
+    var count = state.recipes.length;
+    var body = count>0
+      ? '<div style="display:flex;flex-direction:column;gap:18px;">'+state.recipes.map(function(it){return recipeCard(it,t,isEn);}).join('')+'</div>'
+      : emptyResults(t);
+    var sub = count>0 ? ('<div style="font-size:13.5px;color:#8c8579;font-weight:500;margin-top:4px;">'+count+' '+esc(t.countSuffix)+'</div>') : '';
+    return '<div style="max-width:740px;margin:0 auto;padding-top:44px;">'+
+      '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:30px;">'+
+        '<div>'+
+          '<div style="font-size:12px;font-weight:700;letter-spacing:.18em;color:#b91c1c;margin-bottom:10px;">'+esc(t.kicker)+'</div>'+
+          '<h1 style="font-family:\'Newsreader\',serif;font-weight:500;font-size:40px;line-height:1.05;letter-spacing:-.02em;margin:0;">'+esc(t.resultsTitle)+'</h1>'+
+          sub+
+        '</div>'+
+        '<button type="button" data-act="reset" style="flex:none;padding:11px 18px;border:1px solid #1b1917;background:none;color:#1b1917;border-radius:999px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;">'+esc(t.newSearch)+'</button>'+
+      '</div>'+
+      body+
+    '</div>';
+  }
+
+  /* =========================== RENDER ============================ */
+  function render(){
+    var t = STR[state.lang];
+    var isEn = state.lang==='en';
+    var content;
+    if(state.status==='loading') content = loadingView(t);
+    else if(state.status==='results') content = resultsView(t, isEn);
+    else content = idleView(t);
+
+    document.getElementById('app').innerHTML =
+      '<div style="min-height:100vh;background:#f4f1ea;color:#1b1917;font-family:\'Hanken Grotesk\',system-ui,sans-serif;">'+
+        topBar(isEn)+
+        '<div class="pad-x" style="padding:0 28px 96px;">'+content+'</div>'+
+      '</div>';
+  }
+
+  /* ====================== EVENT DELEGATION ======================= */
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-act]');
+    if(!b) return;
+    var act = b.getAttribute('data-act');
+    var key = b.getAttribute('data-key');
+    if(act==='lang') setLang(b.getAttribute('data-lang'));
+    else if(act==='toggle'){ var it=itemByKey[key]; if(it) toggle(it); }
+    else if(act==='add'){ var it2=itemByKey[key]; if(it2) addItem(it2); }
+    else if(act==='remove') remove(key);
+    else if(act==='addfree') addFree();
+    else if(act==='clear') clearAll();
+    else if(act==='find') find();
+    else if(act==='reset') reset();
+  });
+  document.addEventListener('input', function(e){
+    if(e.target && e.target.id==='freetext') state.freeText=e.target.value;
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.target && e.target.id==='freetext' && e.key==='Enter'){ e.preventDefault(); addFree(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
