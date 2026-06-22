@@ -29,8 +29,6 @@ Pantry → Recipes is a single-page web app that takes the ingredients you have 
 
 The recipe dataset is embedded directly in the page as structured data, with each recipe tagged by its ingredients and stored in both English and Spanish. When you enter the ingredients you have, a client-side matching engine compares them against every recipe's ingredient list, scores each recipe by how closely it matches, and ranks the results so the best fits appear first. Because all of this happens in the browser, there is no server round-trip — matching is instant, and the app keeps working with no connection.
 
-> *Note:* a couple of implementation specifics (the exact match-scoring rule and the language-toggle mechanism) are described here at a high level. Tighten this paragraph to mirror your actual code if you want it to read as precise technical documentation.
-
 ## Tech stack
 
 - **HTML5, CSS3, vanilla JavaScript** — no frameworks, no dependencies, no build tooling
